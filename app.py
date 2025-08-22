@@ -1,10 +1,11 @@
 import streamlit as st
-from sentence_transformers import SentenceTransformer
 import numpy as np
 import re
+from transformers import AutoTokenizer, TFAutoModel
+import tensorflow as tf
 
 # ----------------------------
-# 1️⃣ Carregar tesauro
+# Carregar tesauro
 # ----------------------------
 TESAURO_FILE = "sth.txt"
 
@@ -12,7 +13,7 @@ def processar_tesauro(file_path):
     termos_principais = []
     sinonimos_por_termo = {}
 
-    with open(file_path, "r", encoding="latin-1") as f:  # evita erro de encoding
+    with open(file_path, "r", encoding="latin-1") as f:
         linhas = f.readlines()
 
     termo_atual = None
@@ -20,7 +21,7 @@ def processar_tesauro(file_path):
         linha = linha.strip()
         if not linha:
             continue
-        if not linha.startswith(" "):  # termo principal
+        if not linha.startswith(" "):
             termo_atual = linha
             termos_principais.append(termo_atual)
             sinonimos_por_termo[termo_atual] = []
@@ -39,32 +40,41 @@ def processar_tesauro(file_path):
 termos_principais, sinonimos_por_termo = processar_tesauro(TESAURO_FILE)
 
 # ----------------------------
-# 2️⃣ Gerar embeddings
+# Modelo de embeddings leve com TF
 # ----------------------------
 st.sidebar.info("Carregando modelo, aguarde alguns segundos...")
-modelo = SentenceTransformer('all-MiniLM-L6-v2')
 
+MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
+tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
+model = TFAutoModel.from_pretrained(MODEL_NAME)
+
+def embed_text(text):
+    inputs = tokenizer(text, return_tensors="tf", truncation=True, padding=True)
+    outputs = model(**inputs)
+    # Média dos tokens para embedding
+    emb = tf.reduce_mean(outputs.last_hidden_state, axis=1)
+    return tf.math.l2_normalize(emb, axis=1).numpy()[0]
+
+# Pré-computar embeddings dos termos
 textos_embeddings = [
     termo + " " + " ".join(sinonimos_por_termo[termo])
     for termo in termos_principais
 ]
-embeddings_termos = modelo.encode(textos_embeddings, convert_to_numpy=True)
-embeddings_termos_norm = embeddings_termos / np.linalg.norm(embeddings_termos, axis=1, keepdims=True)
+embeddings_termos = np.array([embed_text(t) for t in textos_embeddings])
 
 st.sidebar.success("Modelo e tesauro carregados!")
 
 # ----------------------------
-# 3️⃣ Função para sugerir termo principal
+# Função para sugerir termo principal
 # ----------------------------
 def sugerir_termo_principal(texto_norma, top_k=1):
-    emb_norma = modelo.encode([texto_norma], convert_to_numpy=True)[0]
-    emb_norma_norm = emb_norma / np.linalg.norm(emb_norma)
-    scores = np.dot(embeddings_termos_norm, emb_norma_norm)
+    emb_norma = embed_text(texto_norma)
+    scores = embeddings_termos @ emb_norma
     indices = np.argsort(scores)[::-1][:top_k]
     return [(termos_principais[i], round(scores[i], 3)) for i in indices]
 
 # ----------------------------
-# 4️⃣ Interface Streamlit
+# Interface Streamlit
 # ----------------------------
 st.title("Bot de Indexação de Normas")
 
