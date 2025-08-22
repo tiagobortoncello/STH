@@ -1,6 +1,3 @@
-# instale as dependências antes de rodar:
-# pip install streamlit sentence-transformers numpy
-
 import streamlit as st
 from sentence_transformers import SentenceTransformer
 import numpy as np
@@ -9,16 +6,13 @@ import re
 # ----------------------------
 # 1️⃣ Carregar tesauro
 # ----------------------------
-
-# Você pode colocar seu sth.txt na mesma pasta ou no diretório do app
 TESAURO_FILE = "sth.txt"
 
-# Função para processar o tesauro
 def processar_tesauro(file_path):
     termos_principais = []
     sinonimos_por_termo = {}
 
-    with open(file_path, "r", encoding="latin-1") as f:  # latin-1 evita erro de encoding
+    with open(file_path, "r", encoding="latin-1") as f:  # evita erro de encoding
         linhas = f.readlines()
 
     termo_atual = None
@@ -47,16 +41,14 @@ termos_principais, sinonimos_por_termo = processar_tesauro(TESAURO_FILE)
 # ----------------------------
 # 2️⃣ Gerar embeddings
 # ----------------------------
-st.sidebar.info("Carregando modelo, pode demorar alguns segundos na primeira vez...")
+st.sidebar.info("Carregando modelo, aguarde alguns segundos...")
 modelo = SentenceTransformer('all-MiniLM-L6-v2')
 
-# Criar embeddings combinando termo principal + sinônimos
 textos_embeddings = [
     termo + " " + " ".join(sinonimos_por_termo[termo])
     for termo in termos_principais
 ]
 embeddings_termos = modelo.encode(textos_embeddings, convert_to_numpy=True)
-# Normalizar embeddings
 embeddings_termos_norm = embeddings_termos / np.linalg.norm(embeddings_termos, axis=1, keepdims=True)
 
 st.sidebar.success("Modelo e tesauro carregados!")
